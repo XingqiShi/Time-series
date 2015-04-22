@@ -1,0 +1,531 @@
+---
+title: "TS_Week5_assignment_Xingqi"
+author: "Xingqi"
+date: "February 12, 2015"
+output: html_document
+---
+
+The daily data is from Illinois Dept of Transporation (IDOT) for I80E 1EXIT (the 2nd data column) - note each data point is an hourly count of the number of vehicles at a specific location on I80E.
+
+Use the daily data for last 2 weeks of June 2013 to develop an ARIMA forecasting model.
+
+Objective is to forecast the hourly counts for July 1.
+
+The actual data file for July 1 is included for you to test your estimate.
+
+## Part 1 - Use ARIMA(p,d,q) model to forecast. Find the model returned by R auto.arima(). Change the values of p and q and determine the best model using AICc and BIC. Do AICc and BIC select the same model as the best model?
+
+Load data.
+
+```{r}
+transportation<- read.csv(file="trafficdatafinal.csv",header=FALSE,sep=",")
+str(transportation)
+```
+
+Divid data. One part is used for constructing model. The other part is used for model validation.
+
+
+```{r}
+
+transportation.all <- ts(transportation, start=1,frequency=1)
+traindata.ts<-ts(transportation[1:360,], start=1,frequency=1)
+holdout.ts<-ts(transportation[361:384,], start=361,frequency=1)
+
+```
+
+Plot traindata
+
+```{r}
+library(tseries)
+plot(traindata.ts)
+```
+
+From above plot, clear seasonal pattern of the data can be observed.
+
+```{r}
+par(mfrow=c(1,2))
+acf(traindata.ts)
+pacf(traindata.ts)
+par(mfrow=c(1,1))
+```
+
+From the acf plots, autocorrelation pattern in the time series can be obeserved. 
+
+
+```{r}
+adf.test(traindata.ts)
+```
+
+Using the adf.test, this time series is in stationary.
+
+Next, the arima model is constructed using auto.arima function in R.
+
+```{r message=FALSE,warning=FALSE}
+library(forecast)
+model.auto<-auto.arima(traindata.ts,seasonal=FALSE)
+model.auto
+```
+
+Next, I built few models manually with either using same order as output of auto.arima or changing p and q value from auto.arima output.
+
+```{r}
+
+model.203<-arima(traindata.ts,order=c(2,0,3));model.203
+model.303<- arima(traindata.ts,order=c(3,0,3)); model.303
+model.403<-arima(traindata.ts,order=c(4,0,3)); model.403
+model.503<-arima(traindata.ts,order=c(5,0,3)); model.503
+model.202<-arima(traindata.ts,order=c(2,0,2));model.202
+model.204<-arima(traindata.ts,order=c(2,0,4));model.204
+```
+
+Check the residuals patterns in the models by QQ-plot. 
+
+```{r}
+par(mfrow=c(1,2))
+qqnorm(residuals(model.auto), main="Q-Q plot: model.auto")
+qqline(residuals(model.auto))
+qqnorm(model.203$residuals, main="Q-Q plot: model.203")
+qqline(residuals(model.203))
+qqnorm(residuals(model.303), main="Q-Q plot: model.303")
+qqline(residuals(model.303))
+qqnorm(residuals(model.403), main="Q-Q plot: model.403")
+qqline(residuals(model.403))
+qqnorm(model.503$residuals, main="Q-Q plot: model.503")
+qqline(residuals(model.503))
+qqnorm(model.202$residuals, main="Q-Q plot: model.202")
+qqline(residuals(model.503))
+qqnorm(model.204$residuals, main="Q-Q plot: model.204")
+qqline(residuals(model.204))
+par(mfrow=c(1,1))
+```
+
+From QQ-plots, residuals in different models share similar pattern. Most of residuals fit with theoretical normal distribution line and very few outliers are observed at the ends.
+
+Summarize the AIC,AICc and BIC values in different models in one table.
+
+```{r}
+rbind(paste("model.auto","AIC=4455.56   AICc=4455.88   BIC=4482.77"),
+paste("model.203 ","AIC=4455.56   AICc=4455.88   BIC=4482.77"),
+paste("model.303 ","AIC=4457.27   AICc=4457.68   BIC=4488.36"),
+paste("model.403 ","AIC=4408.92   AICc=4409.44   BIC=4443.9"),
+paste("model.503 ","AIC=4413.52   AICc=4414.15   BIC=4452.39"),
+paste("model.202 ","AIC=4456.52   AICc=4456.76   BIC=4479.83"),
+paste("model.204 ","AIC=4455.75   AICc=4456.16   BIC=4486.84"))
+```
+
+Using the value of AICc, model.403 (ARIMA(4,0,3)) with the lowest value is selected as the best model. Using the value of BIC, model.403 (ARIMA(4,0,3)) with the lowest value is selected as the best model. The AICc and BIC select the same arima model (ARIMA(4,0,3)) in this part.
+
+
+#Part 2 - Use day of the week seasonal ARIMA(p,d,q)(P,Q,D)s model to forecast for July 1 (which is a Monday)
+
+Set data as time series with weekly frequency.
+
+```{r}
+transportation.week <- ts(transportation, start=1,frequency=168)
+traindata.week<-ts(transportation[1:360,], start=1,frequency=168)
+holdout.week<-ts(transportation[361:384,], start=361,frequency=168)
+```
+
+Built a week seasonal model using auto.arima.
+
+```{r}
+model.week.auto <- auto.arima(traindata.week, seasonal=TRUE);model.week.auto
+```
+
+Construct few different models with either using same order of auto.arima output or changing different p and q values.
+
+```{r}
+model.week.012.010<-arima(traindata.week, order=c(0,1,2),
+                          seasonal= list(order=c(0,1,0),period=168))
+model.week.112.010<-arima(traindata.week, order=c(1,1,2),
+                          seasonal= list(order=c(0,1,0),period=168))
+model.week.111.010<-arima(traindata.week, order=c(1,1,1),
+                          seasonal= list(order=c(0,1,0),period=168))
+model.week.013.010<-arima(traindata.week, order=c(0,1,3),
+                          seasonal= list(order=c(0,1,0),period=168))
+model.week.012.110<-arima(traindata.week, order=c(0,1,2),
+                          seasonal= list(order=c(1,1,0),period=168))
+
+```
+
+Next, I determine the residual patterns in these models. I plot two of the models as below.
+
+```{r}
+
+tsdisplay(model.week.auto$residuals)
+tsdisplay(model.week.012.010$residuals)
+```
+
+The residuals in these models share similar pattern from ACF and PACF plots.
+
+```{r}
+par(mfrow=c(1,2))
+qqnorm(residuals(model.week.auto), main="Q-Q plot: model.week.auto")
+qqline(residuals(model.week.auto))
+qqnorm(residuals(model.week.012.010), main="Q-Q plot: model.week.012.010")
+qqline(residuals(model.week.012.010))
+qqnorm(residuals(model.week.112.010), main="Q-Q plot: model.week.112.010")
+qqline(residuals(model.week.112.010))
+qqnorm(residuals(model.week.111.010), main="Q-Q plot: model.week.111.010")
+qqline(residuals(model.week.111.010))
+qqnorm(residuals(model.week.013.010), main="Q-Q plot: model.week.013.010")
+qqline(residuals(model.week.013.010))
+qqnorm(residuals(model.week.012.110), main="Q-Q plot: model.week.012.110")
+qqline(residuals(model.week.012.110))
+par(mfrow=c(1,1))
+```
+
+The residuals patterns in these models are identical. The residuals fit with theoretical normal lines in the middle of curve and deviation is observed at both ends.
+
+The AIC, AICc and BIC values of above models are summarized as below.
+
+```{r}
+rbind(paste("model.week.auto    ","AIC=2249.31   AICc=2249.44   BIC=2259.07"),
+      paste("model.week.012.010 ","AIC=2249.31   AICc=2249.44   BIC=2259.07"),
+paste("model.week.112.010 ","AIC=2249.85   AICc=2250.06   BIC=2262.86"),
+paste("model.week.111.010 ","AIC=2252.86   AICc=2252.99   BIC=2262.62"),
+paste("model.week.013.010 ","AIC=2250.07   AICc=2250.28   BIC=2263.08"),
+paste("model.week.012.110 ","AIC=2250.66   AICc=2250.87   BIC=2263.67"))
+```
+
+The model.week.auto and model.week.012.010 (both ARIMA(0,1,2)(0,1,0)[168]) have the same lowest AIC, AICc and BIC scores. 
+
+I would forecast the July 1 with these two models and compare the forecast results. The forecasts are as below.
+
+```{r}
+forecast.week.auto <- forecast(model.week.auto,h=24)
+forecast.week.012.010 <- forecast(model.week.012.010,h=24)
+```
+
+Bind the forecast together.
+
+```{r}
+rbind(actual.data=holdout.week, 
+      forecast.week.auto=forecast.week.auto$mean,
+      forecast.week.012.010=forecast.week.012.010$mean)
+```
+
+The forecast values from these two models are identical and are close to actual data in holdout.
+
+Plot the forecasts as below.
+
+```{r}
+
+plot(forecast.week.auto)
+plot(forecast.week.012.010)
+````
+
+Plot the mean of forecast with the actual values in the same graph
+
+```{r}
+ts.plot(ts(transportation, start=1,frequency=1),
+        ts(forecast.week.auto$mean,start=361,frequency=1),
+        ts(forecast.week.012.010$mean,start=361,frequency=1),
+        col=c("black","blue","red"),ylim=c(0,1600),xlim=c(1,384),
+        lty=c(1,2,3),
+        lwd=2)
+legend("topright",
+       legend=c("actual values","forecast.week.auto","forecast.week.012.010"),
+       col=c("black","blue","red"),
+       lty=c(1,2,3),
+       lwd=2,cex=0.7,bty="n")
+```
+
+Zoom in prediction part only
+
+```{r}
+ts.plot(ts(transportation, start=1,frequency=1),
+        ts(forecast.week.auto$mean,start=361,frequency=1),
+        ts(forecast.week.012.010$mean,start=361,frequency=1),
+        col=c("black","blue","red"),ylim=c(0,1500),xlim=c(361,384),
+        lty=c(1,2,3),lwd=2)
+legend("topright",
+       legend=c("actual values","forecast.week.auto","forecast.week.012.010"),
+       col=c("black","blue","red"),
+       lty=c(1,2,3,4),
+       lwd=2,cex=0.7,bty="n")
+```
+
+The forecasts from two models are overlapping with each other from graph.
+
+Calculation of forecast error is as below.
+
+```{r}
+forecast.week.auto.error<- transportation.week[361:384]-(forecast.week.auto$mean)
+forecast.week.012.010.error<- transportation.week[361:384]-(forecast.week.012.010$mean)
+
+rbind(forecast.week.auto.error=forecast.week.auto.error,
+      forecast.week.012.010.error=forecast.week.012.010.error)
+```
+
+Calculation of mean of absolute deviation
+
+```{r}
+forecast.week.auto.MAD<-sum(abs(forecast.week.auto.error))/24
+forecast.week.012.010.MAD<-sum(abs(forecast.week.012.010.error))/24
+rbind(forecast.week.auto.MAD=forecast.week.auto.MAD,
+      forecast.week.012.010.MAD=forecast.week.012.010.MAD)
+```
+
+
+Calculation of forecast squared error
+
+```{r}
+forecast.week.auto.squared.error<- sum((forecast.week.auto.error)^2)
+forecast.week.012.010.squared.error<- sum((forecast.week.012.010.error)^2)
+rbind(forecast.week.auto.squared.error=forecast.week.auto.squared.error,
+      forecast.week.012.010.squared.error=forecast.week.012.010.squared.error)
+```
+
+Calculation of forecast MSE
+
+```{r}
+forecast.week.auto.MSE <- forecast.week.auto.squared.error/24
+forecast.week.012.010.MSE <- forecast.week.012.010.squared.error/24
+rbind(forecast.week.auto.MSE = forecast.week.auto.MSE,
+      forecast.week.012.010.MSE = forecast.week.012.010.MSE)
+```
+
+From above analysis, forecasts from forecast.week.auto and forecast.week.012.010 share identical values of forecast, forecast error, mean of absolute deviation, squared error and MSE. These two models are actually using same order: ARIMA(0,1,2)(0,1,0)[168]. These two models are identical. I would use either forecast.week.012.010 or forecast.week.auto to forecast for July 1. The forecast result for July 1 is shown above and also as below.
+
+```{r}
+forecast.week.012.010
+```
+
+
+
+## Part 3 - Use hour of the day seasonal ARIMA (p,d,q)(P,D,Q)s model to forecast for the hours 8:00, 9:00, 17:00 and 18:00 on July 1
+
+Set the data as day seasonal time series.
+
+```{r}
+transportation.day <- ts(transportation, start=1,frequency=24)
+traindata.day <- ts(transportation[1:360,], start=1,frequency=24)
+holdout.day <- ts(transportation[361:384,], start=361,frequency=24)
+```
+
+Construct a seasonal arima model using auto.arima
+
+```{r}
+model.day.auto <- auto.arima(traindata.day, seasonal=TRUE);model.day.auto
+```
+
+Change the values of p and q
+
+```{r}
+model.day.201.201<-arima(traindata.day, order=c(2,0,1),
+                          seasonal= list(order=c(2,0,1),period=24))
+model.day.202.201<-arima(traindata.day, order=c(2,0,2),
+                          seasonal= list(order=c(2,0,1),period=24))
+model.day.200.201<-arima(traindata.day, order=c(2,0,0),
+                          seasonal= list(order=c(2,0,1),period=24))
+model.day.201.301<-arima(traindata.day, order=c(2,0,1),
+                          seasonal= list(order=c(3,0,1),period=24))
+```
+
+The residual pattern of model.day.auto is plotted as below.
+
+```{r}
+tsdisplay(model.day.auto$residual)
+tsdisplay(model.day.201.201$residual)
+tsdisplay(model.day.202.201$residual)
+tsdisplay(model.day.200.201$residual)
+tsdisplay(model.day.201.301$residual)
+```
+
+The residual patterns in other models look similar. 
+
+The QQ-plots of the day seasonal models are shown as below.
+
+```{r}
+
+par(mfrow=c(1,2))
+qqnorm(residuals(model.day.auto), main="Q-Q plot: model.day.auto")
+qqline(residuals(model.day.auto))
+qqnorm(residuals(model.day.201.201), main="Q-Q plot: model.day.201.201")
+qqline(residuals(model.day.201.201))
+qqnorm(residuals(model.day.202.201), main="Q-Q plot: model.day.202.201")
+qqline(residuals(model.day.202.201))
+qqnorm(residuals(model.day.200.201), main="Q-Q plot: model.day.200.201")
+qqline(residuals(model.day.200.201))
+qqnorm(residuals(model.day.201.301), main="Q-Q plot: model.day.201.301")
+qqline(residuals(model.day.201.301))
+par(mfrow=c(1,1))
+```
+
+The residuals patterns in different models are similar. Most of residuals are close to normal distribution line and only both ends deviate from trend line.
+
+Compare AIC, AICc and BIC values of different models
+
+```{r}
+rbind(paste("model.day.auto    ","AIC=4307.78   AICc=4308.19   BIC=4338.86"),
+      paste("model.day.201.201 ","AIC=4349.66   AICc=4350.07   BIC=4380.74"),
+      paste("model.day.202.201 ","AIC=4344.79   AICc=4345.3    BIC=4379.76"),
+      paste("model.day.200.201 ","AIC=4359.34   AICc=4359.66   BIC=4386.55"),
+      paste("model.day.201.301 ","AIC=4344.63   AICc=4345.15   BIC=4379.61"))
+      
+```
+
+Model.day.auto has the lowest AIC, AICc and BIC values comparing with other models. I would choose model.day.auto(ARIMA(2,0,1)(2,0,1)[24]) for further forecast.
+
+The forecast of July 1 is performed as below.
+
+```{r}
+forecast.day.auto <- forecast(model.day.auto,h=24)
+rbind(actual.data=holdout.day, 
+      forecast.day.auto=forecast.day.auto$mean)
+```
+
+Forecast for the hours 8:00, 9:00, 17:00 and 18:00 on July 1 can be extracted.
+
+```{r}
+time<- c("8:00","9:00","17:00","18:00")
+forecast.hours<-forecast.day.auto$mean[c(8,9,17,18)]
+cbind(time=time,forecast=round(forecast.hours,2))
+```
+
+Forecast errors of July 1 are calculated as below.
+
+```{r}
+forecast.day.auto.error<- transportation.day[361:384]-(forecast.day.auto$mean)
+rbind(forecast.week.auto.error=forecast.week.auto.error,
+      forecast.day.auto.error=forecast.day.auto.error)
+```
+
+The forecast of July 1 is plotted as below.
+
+```{r}
+plot(forecast.day.auto)
+ts.plot(ts(transportation, start=1,frequency=1),
+        ts(forecast.day.auto$mean,start=361,frequency=1),
+        col=c("black","blue"),ylim=c(0,1600),xlim=c(1,384),
+        lty=c(1,2))
+legend("topright",
+       legend=c("actual values","forecast.day.auto"),
+       col=c("black","blue"),
+       lty=c(1,1),
+       lwd=1,cex=0.7)
+```
+
+Zoom in prediction part only
+
+```{r}
+
+ts.plot(ts(transportation, start=1,frequency=1),
+        ts(forecast.day.auto$mean,start=361,frequency=1),
+        col=c("black","blue"),ylim=c(0,1600),xlim=c(361,384),
+        lty=c(1,2))
+legend("topright",
+       legend=c("actual values","forecast.day.auto"),
+       col=c("black","blue"),
+       lty=c(1,1),
+       lwd=1,cex=0.7,bty='n')
+points(368,forecast.day.auto$mean[8],col="blue",cex=1.5,pch=19)
+points(369,forecast.day.auto$mean[9],col="blue",cex=1.5,pch=19)
+points(377,forecast.day.auto$mean[17],col="blue",cex=1.5,pch=19)
+points(378,forecast.day.auto$mean[18],col="blue",cex=1.5,pch=19)
+```
+
+The points in the graph show the forecast of hours 8:00, 9:00, 17:00 and 18:00 on July 1.
+
+## Part 4 - For the July 1 8:00, 9:00, 17:00 and 18:00 forecasts, which model is better (part 2 or part 3) ?
+
+The July 1 forecasts from day seasonal model and week seasonal model are plotted as below.
+
+```{r}
+ts.plot(ts(transportation, start=1,frequency=1),
+        ts(forecast.day.auto$lower[,2],start=361,frequency=1),
+        ts(forecast.day.auto$mean,start=361,frequency=1),
+        ts(forecast.day.auto$upper[,2],start=361,frequency=1),
+        col=c("black","red","red","red"),ylim=c(0,1800),xlim=c(361,384),
+        lwd=c(3,1,3,1),
+        lty=c(1,2,1,2))
+legend("topright",
+       legend=c("actual values","forecast.day.auto 95%","forecast.day.auto"),
+       col=c("black","red","red"),
+       lwd=c(3,1,3),
+        lty=c(1,2,1),bty='n',cex=0.7)
+points(368,forecast.day.auto$mean[8],col="red",cex=1.5,pch=24)
+points(369,forecast.day.auto$mean[9],col="red",cex=1.5,pch=24)
+points(377,forecast.day.auto$mean[17],col="red",cex=1.5,pch=24)
+points(378,forecast.day.auto$mean[18],col="red",cex=1.5,pch=24)
+```
+
+The black solid line shows the actual values. The red solid line stands for forecast values from day seasonal model. The dashed line shows 95% confidence intervals of forecast. The July 1 8:00, 9:00, 17:00 and 18:00 forecasts from day seasonal arima are marked with red triangles. 
+
+```{r}
+ts.plot(ts(transportation, start=1,frequency=1),
+        ts(forecast.week.auto$lower[,2],start=361,frequency=1),
+        ts(forecast.week.auto$mean,start=361,frequency=1),
+        ts(forecast.week.auto$upper[,2],start=361,frequency=1),
+        col=c("black","blue","blue","blue"),ylim=c(0,1800),xlim=c(361,384),
+        lwd=c(3,1,3,1),
+        lty=c(1,2,1,2))
+legend("topright",
+       legend=c("actual values","forecast.week.auto","forecast.week.auto 95%"),
+       col=c("black","blue","blue"),
+       lwd=c(3,3,1),
+        lty=c(1,1,2),bty='n',cex=0.7)
+points(368,forecast.week.auto$mean[8],col="blue",cex=1.5,pch=19)
+points(369,forecast.week.auto$mean[9],col="blue",cex=1.5,pch=19)
+points(377,forecast.week.auto$mean[17],col="blue",cex=1.5,pch=19)
+points(378,forecast.week.auto$mean[18],col="blue",cex=1.5,pch=19)
+
+```
+
+The black solid line shows the actual values. The blue solid line stands for forecast values from week seasonal model.The dashed line show 95% confidence intervals of forecast. The July 1 8:00, 9:00, 17:00 and 18:00 forecasts from week seasonal arima are marked with blue points. 
+
+Plot the forecast from two models in one graph.
+
+```{r}
+ts.plot(ts(transportation, start=1,frequency=1),
+        ts(forecast.day.auto$lower[,2],start=361,frequency=1),
+        ts(forecast.day.auto$mean,start=361,frequency=1),
+        ts(forecast.day.auto$upper[,2],start=361,frequency=1),
+        ts(forecast.week.auto$lower[,2],start=361,frequency=1),
+        ts(forecast.week.auto$mean,start=361,frequency=1),
+        ts(forecast.week.auto$upper[,2],start=361,frequency=1),
+        col=c("black","red","red","red","blue","blue","blue"),ylim=c(0,1800),xlim=c(361,384),
+        lwd=c(3,1,3,1,1,3,1),
+        lty=c(1,2,1,2,2,1,2))
+legend("topright",
+       legend=c("actual values","forecast.day.auto 95%","forecast.day.auto","forecast.week.auto","forecast.week.auto 95%"),
+       col=c("black","red","red","blue","blue"),
+       lwd=c(3,1,3,3,1),
+        lty=c(1,2,1,1,2),bty='n',cex=0.7)
+points(368,forecast.week.auto$mean[8],col="blue",cex=1.5,pch=19)
+points(369,forecast.week.auto$mean[9],col="blue",cex=1.5,pch=19)
+points(377,forecast.week.auto$mean[17],col="blue",cex=1.5,pch=19)
+points(378,forecast.week.auto$mean[18],col="blue",cex=1.5,pch=19)
+points(368,forecast.day.auto$mean[8],col="red",cex=1.5,pch=24)
+points(369,forecast.day.auto$mean[9],col="red",cex=1.5,pch=24)
+points(377,forecast.day.auto$mean[17],col="red",cex=1.5,pch=24)
+points(378,forecast.day.auto$mean[18],col="red",cex=1.5,pch=24)
+```
+
+The black solid line shows the actual values. The red solid line stands for forecast values from day seasonal model. The dashed line shows 95% confidence intervals of forecast. The blue solid line stands for forecast values from week seasonal model.The dashed line show 95% confidence intervals of forecast. The July 1 8:00, 9:00, 17:00 and 18:00 forecasts from week seasonal arima are marked with blue points. The July 1 8:00, 9:00, 17:00 and 18:00 forecasts from day seasonal arima are marked with red triangles. 
+
+From graph, I can observe clearly that July 1 8:00, 9:00, 17:00 and 18:00 forecasts from week seasonal arima model are closer to actual values than the forecasts from day seasonal arima model.
+
+Next, the forecast error of July 1 8:00, 9:00, 17:00 and 18:00 from both models are summarized in one table.
+
+```{r}
+error<-cbind(day.seasonal=forecast.day.auto.error[c(8,9,17,18)],
+week.seasonal=forecast.week.auto.error[c(8,9,17,18)])
+rownames(error)=c("8:00","9:00","17:00","18:00")
+error
+```
+
+Sum of squared error are calculated as below.
+
+```{r}
+sum.squared.error.day=sum((error[,1])^2)
+sum.squared.error.week=sum((error[,2])^2)
+cbind(sum.squared.error.day=sum.squared.error.day,
+      sum.squared.error.week=sum.squared.error.week)
+```
+
+The sum of squared error of week seasonal model is lower than the value in day seasonal model. 
+
+Take the above comparision together, I would choose week seasonal arima in part 2 for July 1 8:00, 9:00, 17:00 and 18:00 forecasts.
+

@@ -1,0 +1,171 @@
+---
+title: "TS_assignment7_Xingqi"
+author: "Xingqi"
+date: "March 11, 2015"
+output: html_document
+---
+
+The attached files contains seat prices from the Chicago Mercantile Exchange. Please note that this data is highly proprietary and confidential. Students registered for this class have been given permission to use the data ONLY for academic purpose and WITHOUT any dissemination.
+
+There are three classes of seats CME, IMM, and IOM which confer the rights to trade different sets of commodities traded. CME seat owners can trade everything, IMM seat owners are allowed to trade everything except agricultural products, and IOM seat owners are allowed to trade only in index products and all options.
+
+The seat price files are marked as ***S. The files contain the price for which CME seats sold and the date of the sale. As expected, the seat price time series is irregularly spaced in time. 
+
+Your task is to adopt an algorithm to create a time series that contains a seat price for each month starting from January 2001 to December 2013. You need to do this for the 3 classes of seats. Note that all 3 seat classes have sale prices for January 2001 so you should not have any start up issues. Please clearly explain why you adopted your algorithm and what other alternatives you may have considered and why you rejected the alternatives.
+
+**Load the data.**
+
+```{r}
+cmeS<-read.csv(file="~/Desktop/Time series/week 8/cmeS.csv", head=TRUE)
+immS<-read.csv(file="~/Desktop/Time series/week 8/immS.csv", head=TRUE)
+iomS<-read.csv(file="~/Desktop/Time series/week 8/iomS.csv", head=TRUE)
+str(cmeS)
+str(immS)
+str(iomS)
+iomS[406:415,2]<-as.numeric(rep(2008,(415-406+1)))
+iomS[406:415,3]<-as.numeric(rep(10,(415-406+1)))
+iomS[,3]<-factor(iomS[,3],levels = 1:12)
+iomS[,2]<-factor(iomS[,2])
+```
+
+```{r message=FALSE, warning=FALSE}
+library(zoo)
+```
+
+**Calculate the final Month.index and added them to the dataset.**
+
+```{r}
+cmeS$Month.index<-(cmeS[,2]-2001)*12+cmeS[,3]
+immS$Month.index<-(immS[,2]-2001)*12+immS[,3]
+iomS$Month.index<-(as.numeric(iomS[,2])-1)*12+as.numeric(iomS[,3])
+```
+
+
+**Write a function to organize dataset.**
+
+The final dataset contains two columns, Month.index and Price.
+
+```{r}
+month.index<-1:((2013-2001+1)*12)
+organize.data <- function(data){
+        output<-matrix(NA,nrow=length(month.index),ncol=2)
+        output[,1]<-month.index
+        output<-as.data.frame(output)
+         for (i in month.index){
+                 output[i,2]=mean(data[data$Month.index==i,4])
+                }
+        colnames(output)=c("Month.index","Price")
+        return(output)
+        }   
+```
+
+
+If there are more than one price in a certain indexed month, the mean of these prices is calculated and is included in the final files. The alternative ways are using the mode or median of these prices.
+
+
+**Apply the function to organize the datasets.**
+
+```{r}
+cme<- organize.data(cmeS)
+imm<- organize.data(immS)
+iom<- organize.data(iomS)
+```
+
+**Fill in the missing values.**
+
+There are three functions in zoo, na.spline(), na.locf() and na.approx(), to fill in the missing value. na.spline() uses polynomial interpolation to fill in missing data. na.locf() stands for last observation carried forward and does just what it says the last observation before NA is used to replace the NA. na.approx() uses linear interpolation to fill in missing data try. These three methods are used in this analysis for comparision.
+
+
+```{r}
+cme1<-na.spline(cme)
+cme2<-na.locf(cme)
+cme3<-na.approx(cme)
+
+matplot(1:156,cbind(cme[,2],cme1[,2],cme2[,2],cme3[,2]),type='l',lty=c(1,2,3,4),
+        col=c("black","red","green","blue"),lwd=2)
+legend(x="topleft",
+       legend=c("cme with NA", "na.spline", "na.locf","na.approx"),
+       col=c("black", "red", "green","blue"),
+       lty=c(1,2,3,4),
+       bty="n")
+
+
+```
+
+From above plot, the results of cmeS from three different methods are similar.
+
+Next, I examed other two datasets.
+
+```{r}
+imm1<-na.spline(imm)
+imm2<-na.locf(imm)
+imm3<-na.approx(imm)
+
+matplot(1:156,cbind(imm[,2],imm1[,2],imm2[,2],imm3[,2]),type='l',lty=c(1,2,3,4),
+        col=c("black","red","green","blue"),lwd=2)
+legend(x="topleft",
+       legend=c("imm with NA", "na.spline", "na.locf","na.approx"),
+       col=c("black", "red", "green","blue"),
+       lty=c(1,2,3,4),
+       bty="n")
+
+```
+
+From above plot, the results of immS from three different methods are similar.
+
+```{r}
+iom1<-na.spline(iom)
+iom2<-na.locf(iom)
+iom3<-na.approx(iom)
+
+matplot(1:156,cbind(iom[,2],iom1[,2],iom2[,2],iom3[,2]),type='l',lty=c(1,2,3,4),
+        col=c("black","red","green","blue"),lwd=2)
+legend(x="topright",
+       legend=c("iom with NA", "na.spline", "na.locf","na.approx"),
+       col=c("black", "red", "green","blue"),
+       lty=c(1,2,3,4),
+       bty="n")
+```
+
+From above plot, the results of iomS from three different methods are similar.
+
+
+In comparision, I think na.spline() using polynomial interpolation to fill in missing data is a reasonable approach for the datasets in this analysis. The missing values in the datasets are always somewhere within the time series. na.spline() using polynomial interpolation is better to mimic zigzug pattern of time series. If there are missing values in a certain indexed month of three datasets, the command na.spline() is used to fill in the missing value in this analysis as below.
+
+
+```{r}
+cme<-na.spline(cme)
+imm<-na.spline(imm)
+iom<-na.spline(iom)
+```
+
+
+Convert the organized data into ts.
+
+```{r}
+cme=ts(cme[,2], start=c(2001,1), end=c(2013,12), frequency=12)
+imm=ts(imm[,2], start=c(2001,1), end=c(2013,12), frequency=12)
+iom=ts(iom[,2], start=c(2001,1), end=c(2013,12), frequency=12)
+```
+
+Plot the time series
+
+```{r}
+plot.ts(cme, ylab="Price", xlab="Year", ylim=c(0,1600000))
+lines(imm, col="red")
+lines(iom, col="green")
+
+legend(x="topleft",
+       legend=c("cmeS", "immS", "iomS"),
+       col=c("black", "red", "green"),lty=1,
+       bty="n")
+```
+
+Check the values of ts.
+
+```{r}
+cme
+imm
+iom
+```
+

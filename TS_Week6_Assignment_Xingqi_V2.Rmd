@@ -1,0 +1,480 @@
+---
+title: "TS_week6_Assignment_Xingqi"
+author: "Xingqi"
+date: "February 12, 2015"
+output: html_document
+---
+
+Load data from TSA package (the package is written by textbook authors Jonathan Cryer and Kung-Sik Chan).
+
+>library("TSA")
+>data(beersales)
+
+The data is the monthly beer sales in millions of barrels, 01/1975 - 12/1990.
+
+Part 1 - use ARIMA(p,d,q) model to forecast beer sales for all months of 1990.
+
+1A - Use the h-period in forecast() to forecast each month of 1990.
+
+1B - Use the monthly data as a continuous time series. Forecast for 1990 Jan, Plug forecast into the time series to forecast for 1990 Feb. And so on and so forth.
+
+1C - which of the two above approaches yield the better results in terms of Mean Squared Error 1990?
+
+Part 2 - use month of the year seasonal ARIMA(p,d,q)(P,Q,D)s model to forecast beer sales for all the months of 1990.
+
+Part 3 - Which model (Part 1 or Part 2) is better to forecast beer sales for each month of 1990 (Jan, Feb, ..., Dec) ? 
+
+Due date: 2015 Feb 19th 11:59pm
+
+Load data,
+
+```{r message=FALSE,warning=FALSE}
+library("TSA")
+library(tseries)
+library(forecast)
+library(car)
+data(beersales)
+str(beersales)
+```
+
+Plot data in a graph.
+
+```{r}
+plot(beersales,type="o")
+```
+
+From above plot, the seasonal variation can be obeserved from pattern. So an additive decomposition is as below.
+
+
+```{r}
+plot(decompose(beersales))
+```
+
+From decomposition of dataset, the clear seasonal parttern can be observed. The trend of beersales go up from 1975 to the early 1980.
+
+##Part 1 - use ARIMA(p,d,q) model to forecast beer sales for all months of 1990.
+
+###1A - Use the h-period in forecast() to forecast each month of 1990.
+
+Split dataset into two parts. One set of data is used for building model. The other set of data is used for model validation.
+
+```{r}
+beersales=ts(beersales, start=c(1975,1),frequency=12)
+beersales.train=window(beersales,start=c(1975,1),end=c(1989,12),frequency=12)
+beersales.holdout=window(beersales,start=c(1990,1),end=c(1990,12),frequency=12)
+```
+
+
+
+Fit the data into ARIMA(p,d,q) model using auto.arima.
+
+```{r}
+arima.auto<-auto.arima(beersales.train,seasonal=FALSE)
+arima.auto
+```
+
+Either using the order of auto.arima or changing p(3:5) and q values(1:5), a few arima models as below are constructed.
+
+```{r}
+table1=matrix(0,(5-1+1)*(5-3+1),4)
+
+k=1
+for (i in 3:5) {
+    for (j in 1:5) {
+            models=arima(beersales.train, order=c(i,1,j))
+            npar=length(models$coef) + 1
+            nstar=length(models$residuals) - models$arma[6] - models$arma[7]*models$arma[5]
+            
+            aic=models$aic
+            bic=models$aic + npar * (log(nstar) - 2)
+            aicc=models$aic + 2*npar*(nstar/(nstar - npar - 1) - 1)
+
+            table1[k,1]=paste0("ARIMA(",i,",",1,",",j,")")
+            table1[k,2]=round(aicc,2)
+            table1[k,3]=round(bic,2)
+            table1[k,4]=round(aic,2)
+            k=k+1
+    }
+}
+```
+
+The AICc and BIC values are printed as below.
+
+```{r}
+table1=data.frame(table1)
+table1=table1[order(table1[,2]),]
+colnames(table1)=c("ARIMA model","AICc","BIC","AIC")
+table1
+
+```
+
+ARIMA(4,1,5) has the lowest AICc and BIC values. ARIMA(5,1,5) has the second lowest AICc and BIC values. I would choose ARIMA(4,1,5) and ARIMA(5,1,5) for further analysis in comparision with arima.auto. 
+
+```{r}
+arima.415<-arima(beersales.train, order=c(4,1,5))
+arima.515<-arima(beersales.train, order=c(5,1,5))
+```
+
+Next, I check the residuals in these models.
+
+**QQ plot**
+
+```{r}
+par(mfrow=c(1,3))
+qqnorm(residuals(arima.auto), main="Q-Q plot: arima.auto")
+qqline(residuals(arima.auto))
+qqnorm(arima.415$residuals, main="Q-Q plot: arima.415")
+qqline(residuals(arima.415))
+qqnorm(arima.515$residuals, main="Q-Q plot: arima.515")
+qqline(residuals(arima.515))
+par(mfrow=c(1,1))
+```
+
+From QQ plot, the residual patterns in these models are very similar. Most of residuals fit to the theoretical line only with deviations at both ends.
+
+**ACF and PACF plot**
+
+I check the autocorrelation of residuals in these models.
+
+```{r}
+tsdisplay(arima.auto$residuals)
+tsdisplay(arima.415$residuals)
+tsdisplay(arima.515$residuals)
+```
+
+From above ACF and PACF plots, the residual patterns in arima.415, arima.515 and arima.auto are similar.There are some lags containing significant autocorrelation in all three models. But autocorrelation in majority lags is not significant. 
+
+**Durbin-Watson test**
+
+The Durbin-Watson tests of the residuals in these three models are performed as below.
+
+```{r}
+dw.arima.415=durbinWatsonTest(as.vector(residuals(arima.415)))
+dw.arima.515=durbinWatsonTest(as.vector(residuals(arima.515)))
+dw.arima.auto=durbinWatsonTest(as.vector(residuals(arima.auto)))
+cbind(arima.415=dw.arima.415,arima.515=dw.arima.515,arima.auto=dw.arima.auto)
+```
+
+From above Durbin-Watson Tests, residuals in arima.415 and arima.auto are slightly negatively autocorrelated while residuals in arima.515 is very little positively autocorrelated.
+
+The forecasts from arima.415, arima.515 and arima.auto are as below. 
+
+```{r}
+forecast.1990.415 <- predict(arima.415,n.ahead=12)
+forecast.1990.515 <- predict(arima.515,n.ahead=12)
+forecast.1990.auto <- predict(arima.auto,n.ahead=12)
+```
+
+Bind the forecast values with the validation actual values together.
+
+```{r}
+rbind(actual.values=beersales.holdout,
+        forecast.415=forecast.1990.415$pred,
+      forecast.515=forecast.1990.515$pred,
+      forecast.auto=forecast.1990.auto$pred)
+```
+
+The predictions are close to actual values. Next, these values are plot in one graph.
+
+
+```{r}
+ts.plot(ts(beersales.holdout,,start=1,frequency=1),
+        ts(forecast.1990.415$pred,start=1,frequency=1),
+        ts(forecast.1990.515$pred,start=1,frequency=1),
+        ts(forecast.1990.auto$pred,start=1,frequency=1),
+        col=c("black","red","blue","green"),lwd=2,lty=c(1,2,2,2),
+        xlab="Month of 1990")
+legend("topright",
+       legend=c("actual values","forecast.415","forecast.515","forecast.auto"),
+       col=c("black","red","blue","green"),lwd=2,lty=c(1,2,2,2),bty='n',cex=0.7)
+```
+
+The graph shows that the predictions of arima 415 and arima.515 are very close to each other. The line pattern of forecast.415 and forecast.515 are closer to actual values than the forecast.auto (from arima.auto). 
+
+Next, MSE of predictions are calculated as below.
+
+```{r}
+forecast.MSE.415=mean((forecast.1990.415$pred-beersales.holdout)^2)
+forecast.MSE.515=mean((forecast.1990.515$pred-beersales.holdout)^2)
+forecast.MSE.auto=mean((forecast.1990.auto$pred-beersales.holdout)^2)
+rbind(MSE.415=forecast.MSE.415,
+      MSE.515=forecast.MSE.515,
+      MSE.auto=forecast.MSE.auto)
+```
+
+MSE of predictions from arima.515 is the lowest among three models. The MSE of predictions from arima.415 is close to prediction MSE of arima.515. The forecast MSE of arima.auto is the highest among three models. The forecast performance of arima.515 is the best among these three models.
+
+Take above comparision together, I would use arim.515 for the forecast of beersales in 1990. The prediction values are as below.
+
+```{r}
+forecast.1990.515$pred
+```
+
+
+### 1B - Use the monthly data as a continuous time series. Forecast for 1990 Jan, Plug forecast into the time series to forecast for 1990 Feb. And so on and so forth. 
+
+I performed step forecasting using two approaches as below. One approach is using the best model arima.515 in part 1A for step forecasting. First, beersales of 1990 Jan is predicted using arima.515. Next, the prediction of 1990 Jan is added back to time series. The new time series is used to update the model with order(5,1,5) for the next step prediction. And so on and so forth, the forecast was performed for 12 months in 1990.
+
+
+```{r}
+step.model<-c()
+step.model[[2]]<-arima.515
+prediction<-c()
+beersale.train.plus<-c()
+beersale.train.plus[[1]]<-beersales.train
+
+for (i in 2:13){
+ 
+        prediction[[i]]<- predict(step.model[[i]],n.ahead=1)
+        
+        beersale.train.plus[[i]]<-ts(c( (beersale.train.plus[[i-1]])[1:length(beersale.train.plus[[i-1]])], prediction[[i]][[1]]),start=1,frequency=1)
+        step.model[[i+1]]=arima(beersale.train.plus[[i]],order=c(5,1,5))
+        i=i+1
+}
+
+step.prediction<-ts(beersale.train.plus[[13]][181:192], start=c(1990,1), frequency=12)
+
+```
+
+
+The other approach is using auto.arima function in R. arima.model. The beersales in 1990 Jan is predicted and this value is added to time series for next step prediction. The order of auto.arima model is also updated in each step of prediction as well.
+
+```{r}
+step.model.auto <- c()
+step.model.auto[[2]] <- arima.auto
+prediction2 <- c()
+beersale.train.plus2 <- c()
+beersale.train.plus2[[1]] <- beersales.train
+
+for (i in 2:13){
+ 
+        prediction2[[i]]<- predict(step.model.auto[[i]],n.ahead=1)
+        
+        beersale.train.plus2[[i]]<-ts(c( (beersale.train.plus2[[i-1]])[1:length(beersale.train.plus2[[i-1]])], prediction2[[i]][[1]]),start=1,frequency=1)
+        step.model.auto[[i+1]]=arima(beersale.train.plus2[[i]],order=arimaorder(auto.arima(beersale.train.plus2[[i]],seasonal=FALSE)))
+        i=i+1
+        
+}
+
+step.prediction.auto<-ts(beersale.train.plus2[[13]][181:192], start=c(1990,1), frequency=12)
+
+```
+
+The forecast results of above two approaches are bind together with actual values and forecast values from part1A.
+
+```{r}
+rbind(actual.values=beersales.holdout,
+      step.prediction.515=step.prediction,
+      step.prediction.auto=step.prediction.auto,
+      forecast.515=forecast.1990.515$pred)
+```
+
+
+The forecast results of above two approaches are plotted together with actual values and forecast values from part1A.
+
+```{r}
+
+ts.plot(ts(beersales.holdout,,start=1,frequency=1),
+        ts(step.prediction,start=1,frequency=1),
+        ts(step.prediction.auto,start=1,frequency=1),
+        ts(forecast.1990.515$pred,start=1,frequency=1),
+        col=c("black","red","blue","green"),lwd=2,lty=c(1,2,2,3),
+        xlab="Month of 1990")
+legend("topright",
+       legend=c("actual values","Step.515","Step.auto","arima.515"),
+       col=c("black","red","blue","green"),lwd=2,lty=c(1,2,2,3),bty='n',cex=0.7)
+
+```
+
+The step forecast values using arima.515 model are very close to the forecast in Part1A. 
+
+Next, forecast MSE with two approaches in this part are calculated as below.
+
+```{r}
+Step.515.MSE<-mean((step.prediction-beersales.holdout)^2)
+Step.auto.MSE<-mean((step.prediction.auto-beersales.holdout)^2)
+rbind(Step.515=Step.515.MSE,
+      Step.auto=Step.auto.MSE)
+```
+
+The step forecast MSE using arima.515 is much lower than the forecast MSE using auto.arima. From above comparision, I would use the first step approch with arima.515 in this part. The prediction values are printed as below.
+
+```{r}
+step.prediction
+```
+
+
+###1C - which of the two above approaches yield the better results in terms of Mean Squared Error 1990?
+
+The MSE of 1990 forecast from Part1. A and Part1. B is summarized as below.
+
+```{r}
+rbind (Part1.A=forecast.MSE.515,Part1.B=Step.515.MSE)
+```
+
+The MSE in part 1B is slightly lower MSE in Part1. B. The approaches in Part1.B yield the better results in terms of MSE 1990.
+
+
+##Part 2 - use month of the year seasonal ARIMA(p,d,q)(P,Q,D)s model to forecast beer sales for all the months of 1990.
+
+The year seasonal arima is built using auto.arima function.
+
+```{r}
+year.auto <- auto.arima(beersales.train, seasonal=TRUE);year.auto
+```
+
+Either using the output of auto.arima or changing p,q, P or Q values, the following models are built.
+
+```{r message=FALSE, warning=FALSE}
+year.412.212<- arima(beersales.train, order=c(4,1,2),
+                          seasonal= list(order=c(2,1,2),period=12))
+
+year.413.212<- arima(beersales.train, order=c(4,1,3),
+                          seasonal= list(order=c(2,1,2),period=12))
+
+year.411.212<- arima(beersales.train, order=c(4,1,1),
+                          seasonal= list(order=c(2,1,2),period=12))
+
+year.410.212<- arima(beersales.train, order=c(4,1,0),
+                          seasonal= list(order=c(2,1,2),period=12))
+
+```
+
+The AIC, AICc and BIC values are summarized as below.
+
+```{r}
+rbind(paste("year.auto    ","AIC=291.1   AICc=292.81   BIC=325.4"),
+paste("year.412.212 ","AIC=289.1   AICc=290.81   BIC=323.4"),
+paste("year.413.212 ","AIC=288.31   AICc=290.33   BIC=325.72"),
+paste("year.411.212 ","AIC=290.74   AICc=292.15   BIC=321.92"),
+paste("year.410.212 ","AIC=324.55   AICc=325.69   BIC=352.61"))
+```
+
+Using the lowest AICc, the best model is year.413.212. Using the lowest BIC, the best model is year.411.212. These two models and year.412.212 are further analyzed as followings.
+
+Next, I check the residuals in these models in comparision with year.auto.
+
+```{r}
+par(mfrow=c(2,2))
+qqnorm(residuals(year.auto), main="Q-Q plot: year.auto")
+qqline(residuals(year.auto))
+qqnorm(year.413.212$residuals, main="Q-Q plot: year.413.212")
+qqline(residuals(year.413.212))
+qqnorm(year.411.212$residuals, main="Q-Q plot: year.411.212")
+qqline(residuals(year.411.212))
+qqnorm(year.412.212$residuals, main="Q-Q plot: year.412.212")
+qqline(residuals(year.412.212))
+par(mfrow=c(1,1))
+```
+
+From QQ plot, the residual patterns in these models are very similar. Most of residuals fit to the theoretical line only with deviations at both ends.
+
+
+I check the autocorrelation of residuals in these models.
+
+```{r}
+tsdisplay(year.auto$residuals)
+tsdisplay(year.413.212$residuals)
+tsdisplay(year.411.212$residuals)
+tsdisplay(year.412.212$residuals)
+```
+
+From above ACF and PACF plots, the residual patterns in above four models are similar. The autocorrelations in all lags is not significant. 
+
+The Durbin-Watson Tests of the residuals in these three models are performed as below.
+
+```{r}
+dw.year.auto=durbinWatsonTest(as.vector(residuals(year.auto)))
+dw.year.413.212=durbinWatsonTest(as.vector(residuals(year.413.212)))
+dw.year.411.212=durbinWatsonTest(as.vector(residuals(year.411.212)))
+dw.year.412.212=durbinWatsonTest(as.vector(residuals(year.412.212)))
+cbind(year.auto=dw.year.auto,year.413.212=dw.year.413.212,year.411.212=dw.year.411.212,year.412.212=dw.year.412.212)
+```
+
+From above Durbin-Watson Tests, residuals in year.411.212 are slightly negatively autocorrelated while residuals in year.auto, year.413.212,and year.412.212 are slightly positively autocorrelated.
+
+The forecast of 1990 from these models are as below.
+
+```{r}
+forecast.seasonal.auto<-predict(year.auto, n.ahead=12)
+forecast.seasonal.413.212<-predict(year.413.212, n.ahead=12)
+forecast.seasonal.411.212<-predict(year.411.212, n.ahead=12)
+forecast.seasonal.412.212<-predict(year.412.212, n.ahead=12)
+```
+
+The predictions from different models are plotted as below.
+
+```{r}
+ts.plot(ts(beersales.holdout,start=1,frequency=1),
+        ts(forecast.seasonal.auto$pred,start=1,frequency=1),
+        ts(forecast.seasonal.413.212$pred,start=1,frequency=1),
+        ts(forecast.seasonal.411.212$pred,start=1,frequency=1),
+        ts(forecast.seasonal.412.212$pred,start=1,frequency=1),
+        col=c("black","red","blue","green","orange"),lwd=2,lty=c(1,2,2,3,4),
+        xlab="Month of 1990")
+legend("topright",
+       legend=c("actual values","year.auto","year.413.212","year.411.212","year.412.212"),
+       col=c("black","red","blue","green","orange"),lwd=2,lty=c(1,2,2,3,4),bty='n',cex=0.7)
+```
+
+The forecast of 1990 from these models are very close to each other and actual values. The forecast of these models mimic the zigzug pattern of actual values. 
+
+Next, MSE of prediction are calculated as below.
+
+```{r}
+cbind(MSE.auto=mean((forecast.seasonal.auto$pred-beersales.holdout)^2),
+MSE.413.212=mean((forecast.seasonal.413.212$pred-beersales.holdout)^2),
+MSE.411.212=mean((forecast.seasonal.411.212$pred-beersales.holdout)^2),
+MSE.412.212=mean((forecast.seasonal.412.212$pred-beersales.holdout)^2))
+```
+
+The forecast MSE of year.411.212 is lowest among these models in this part. I would use year.411.212 for prediction. The prediction values are listed as below.
+
+```{r}
+Forecast.Part2<-forecast.seasonal.411.212$pred; Forecast.Part2
+```
+
+
+
+##Part 3 - Which model (Part 1 or Part 2) is better to forecast beer sales for each month of 1990 (Jan, Feb, ..., Dec) ?
+
+The prediction MSE of 1990 in Part 2 is lower than the prediction MSE of 1990 in part1. The predictions and absolute prediction errors in part1 and part2 are bind as below.
+
+```{r}
+comparision<-rbind(actual.values=beersales.holdout,
+      Forecast.Part1B=step.prediction,
+      Forecast.Part2=Forecast.Part2,
+      abs.dif.Part1B=abs(step.prediction-beersales.holdout),
+      abs.dif.Part2=abs(Forecast.Part2-beersales.holdout))
+      
+colnames(comparision)=c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+comparision
+```
+
+The comaprision of prediction absolute error is as below. 
+
+```{r}
+comparision<-as.data.frame(comparision)
+((comparision[4,]-comparision[5,])>0)
+```
+
+To forecast beersales in Jan, Apr,Jun, Jul, Aug, Oct of 1990, the model in part 2 performs better than model in part 1. To forecast beersales in Feb, Mar, May, Sep, Nov, and Dec of 1990, the model in part 1 performs better than the model in part 2.
+
+The prediction in part 1 and part 2 are plotted together with actual values as below.
+
+```{r}
+ts.plot(ts(beersales.holdout,start=1,frequency=1),
+        ts(step.prediction,start=1,frequency=1),
+        ts(Forecast.Part2,start=1,frequency=1),
+        col=c("black","red","blue"),lwd=2,lty=c(1,2,3),xlab="Month of 1990")
+
+legend("topright",
+       legend=c("actual values","Forecast.Part1B","Forecast.Part2"),
+       col=c("black","red","blue"),lwd=2,lty=c(1,2,3),bty='n',cex=0.7)
+points(c(1,4,6,7,8,10),Forecast.Part2[c(1,4,6,7,8,10)],col="green",cex=1.2,pch=24)
+points(c(2,3,5,9,11,12),step.prediction[c(2,3,5,9,11,12)],col="green",cex=1.2,pch=24)
+```
+
+The black line shows actual values. The red dashed line shows the forecast values from Part 1B. The Blue line is the forecast from Part2. The green triangles show the prediction from either Part1B or Part2 with less absolute prediction error. The selection of models is the same as above.  To forecast beersales in Feb, Mar, May, Sep, Nov, and Dec of 1990, the model in part 1 performs better. To forecast beersales in Jan, Apr,Jun, Jul, Aug, Oct of 1990, the model in part 2 performs better.
+
+Through the graph, the forecast pattern in Part2 is closer to the zigzug pattern in actual value than the model in Part1B. The overall forecast capability of Part2(seasonal arima) perform better than the model in Part1. MSE of forecast in Part2 is lower than forecast MSE in Part1. The beersales dataset show apparent seasonality. The seasonal arima model in part 2 is better in forecasting the seasonality in the dataset.

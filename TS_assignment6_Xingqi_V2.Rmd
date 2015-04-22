@@ -1,0 +1,653 @@
+---
+title: "TS_assignment6_Xingqi"
+author: "Xingqi"
+date: "February 27, 2015"
+output: html_document
+---
+
+Attached gas furnace dataset has the following:
+
+Input gas rate - this is the independent variable
+
+Output gas CO2 % - this is the dependent variable that needs to be forecast
+
+Tasks:
+
+1. Use linear regression model - plot the ACF - what can you conclude ?
+2. Use ARIMA (0,0,1) model for the residuals. Adjust the Input gas rate and Output CO2 % with the MA coefficient. Combine with the linear regression model. Plot the residuals.
+3. Use ARIMA (1,0,0) model for the residuals. Adjust the Input gas rate and Output CO2 % with the AR coefficient. Combine with the linear regression model. Plot the residuals.
+4. Use ARIMA (0,0,2) model for the residuals. Adjust the Input gas rate and Output CO2 % with the MA coefficient. Combine with the linear regression model. Plot the residuals.
+5. Use ARIMA (2,0,0) model for the residuals. Adjust the Input gas rate and Output CO2 % with the AR coefficient. Combine with the linear regression model. Plot the residuals.
+6. Use ARIMA (2,0,2) model for the residuals. Adjust the Input gas rate and Output CO2 % with the AR and MA coefficients. Combine with the linear regression model. Plot the residuals.
+7. Use fractional ARIMA model (aka ARFIMA) for the output gas CO2% - plot the residuals, acf and pacf plots of the model. You can use an R package like fracdiff
+8. Which ARIMA model gives the best result in terms of residuals being close to white noise ?
+
+The file arma_innovation.R contains an R function arma.innovation () that might be useful for adjusting the gas rate and CO2% given an ARMA model.  You should study the code and the example in the file to try to understand what the function does and how it might help you.
+
+Due date: 2015 Mar 5th 6:00pm
+
+##1. Use linear regression model - plot the ACF - what can you conclude ?
+
+```{r message=FALSE,warning=FALSE}
+library(forecast)
+```
+
+The dataset is visualized as below.
+
+```{r}
+gas<-read.csv(file="CO2_gas.csv")
+str(gas)
+gas.ts<-ts(gas, start=1)
+plot(gas.ts)
+```
+
+The scatterplot of two variables in the dataset is graphed as below.
+
+```{r}
+plot(Outlet.gas.CO2.percentage~Input.gas.rate, data=gas.ts)
+```
+
+The correlation between two variables, Outlet.gas.CO2.percentage and Input.gas.rate, can be observed from above graph.
+
+The linear model is generated using Outlet.gas.CO2.percentage as dependent variable and Input.gas.rate as independent variable.
+
+
+```{r}
+linear.model<-lm(Outlet.gas.CO2.percentage~Input.gas.rate, data=gas.ts)
+summary(linear.model)
+````
+
+From summary of this linear.model, both intercept and slope of Input.gas.rate are statistically significant. The R-squared value is 0.2347. This low R-squared value demonstrates that the model don't fit with dataset well.
+
+The trend line of linear.model is graphed as below.
+
+```{r}
+plot(Outlet.gas.CO2.percentage~Input.gas.rate, data=gas.ts)
+abline(linear.model,col="red")
+```
+
+The fitted values of linear.model are plotted in a same graph with the actual values. 
+
+```{r}
+plot(gas$Outlet.gas.CO2.percentage, type='l')
+lines(linear.model$fitted.values, col="red")
+legend("bottomright",
+       legend=c("actual values","fitted values"),
+       col=c("black","red"),lwd=1,bty='n')
+```
+
+The fitted values follow the trend of actual values but the fitted values don't mimic the zig-zug pattern very well.
+
+Next, the residuals of linear.model are further analyzed. 
+
+**Q-Q plot**
+
+
+```{r}
+qqnorm(linear.model$residuals)
+qqline(linear.model$residuals)
+```
+
+Most of residuals fit with theoretical trend line and only with some deviations at both ends.
+
+**ACF and PACF plot**
+
+The residuals in the linear model are plotted.
+
+```{r}
+tsdisplay(linear.model$residuals)
+```
+
+ACF plot of residuals display certain pattern instead of random distribution. Autocorrelation of residuals in some Lags are significant .
+
+**Durbin-Watson test**
+
+```{r}
+library(car)
+dw.1<-durbinWatsonTest(residuals(linear.model));dw.1
+```
+
+From above Durbin-Watson Test, residuals in linear.model are positively autocorrelated.
+
+
+**Ljung-Box test**
+
+```{r}
+library(stats)
+box.test.1<-Box.test(residuals(linear.model),lag=20, fitdf=2, type="Ljung-Box"); box.test.1
+```
+
+The null hypothesis of box.test is that the tested residulas are white noise. The p value of this Box test of reisduals is below 0.05. I can reject the null hypothesis and conclude that there is some correlation in the tested residuals.
+
+
+##2. Use ARIMA (0,0,1) model for the residuals. Adjust the Input gas rate and Output CO2 % with the MA coefficient. Combine with the linear regression model. Plot the residuals.
+
+Extract the residuals from linear.model and generate an arima model in the residuals with order(0.0,1).
+
+```{r}
+residuals.linear<-linear.model$residuals
+arima.001<-arima(residuals.linear, order=c(0,0,1),include.mean=FALSE)
+summary(arima.001)
+```
+
+The Outlet.gas.CO2.percentage and Input.gas.rate is transformed using the parameters from arima.001. The linear model, model.2, is generated using the transformed variables.
+
+```{r}
+source('~/Desktop/Time series/week 7/arma_innovation.R', encoding='UTF-8')
+innovation.001.outlet <- arma.innovation(gas$Outlet.gas.CO2.percentage, arima.001)
+innovation.001.input <- arma.innovation(gas$Input.gas.rate, arima.001)
+model.2 <- lm(innovation.001.outlet~innovation.001.input)
+summary(model.2)
+```
+
+From summary of this model.2, both intercept and slope are statistically significant. The R-squared value is 0.3033, which is higher than the linear.model in part1. So the fit of this model is improved a little comparing with linear.model in part.1.
+
+The actual values and fitted.values of the models are plotted in one graph.
+
+```{r}
+plot(innovation.001.outlet, type='l')
+lines(model.2$fitted.values, col="red")
+legend("bottomright",
+       legend=c("actual values","fitted values"),
+       col=c("black","red"),lwd=1,bty='n')
+```
+
+The fitted values follow the trend of actual values but fitted values don't mimic the actual values zig-zug pattern.
+
+**Q-Q plot**
+
+The residuals of model.2 are plotted as below.
+
+```{r}
+qqnorm(model.2$residuals)
+qqline(model.2$residuals)
+```
+
+Most of residuls fit the theoretical line and only some deviations are observed at both ends.
+
+**ACF and PACF**
+
+```{r}
+tsdisplay(model.2$residuals)
+```
+
+Autocorrelation of some Lags of residuals can be clearly observed from ACF and PACF plots.
+
+**Durbin-Watson Test**
+
+```{r}
+dw.2<-durbinWatsonTest(residuals(model.2));dw.2
+```
+
+From above Durbin-Watson Test, residuals in model.2 are positively autocorrelated.
+
+**Ljung-Box test**
+
+```{r}
+box.test.2<-Box.test(residuals(model.2),lag=20, fitdf=2, type="Ljung-Box"); box.test.2
+```
+
+p-value of box.test.2 is below 0.05. There are some correltaion in the residuals of model.2.
+
+##3. Use ARIMA (1,0,0) model for the residuals. Adjust the Input gas rate and Output CO2 % with the AR coefficient. Combine with the linear regression model. Plot the residuals.
+
+The residuals of linear.model is transformed using arima(1,0,0).
+
+```{r}
+arima.100<-arima(residuals.linear, order=c(1,0,0),include.mean=FALSE)
+```
+
+The two variables are transformed using the parameters from arima.100 and model.3 is generated using the transformed variables.
+
+```{r}
+innovation.100.outlet <- arma.innovation(gas$Outlet.gas.CO2.percentage, arima.100)
+innovation.100.input <- arma.innovation(gas$Input.gas.rate, arima.100)
+model.3 <- lm(innovation.100.outlet~innovation.100.input)
+summary(model.3)
+```
+
+From summary of this model.3, both intercept and slope are statistically significant. The R-squared value is 0.07716, which is lower than the linear.model in part1. So the fit of this model is lower comparing with linear.model before transformation.
+
+```{r}
+plot(innovation.100.outlet, type='l')
+lines(model.3$fitted.values, col="red")
+legend("bottomright",
+       legend=c("actual values","fitted values"),
+       col=c("black","red"),lwd=1,bty='n')
+```
+
+The fitted values of model.3 show different pattern from actual values. This model is not good to predict the peeks of output.
+
+The residuals of model.3 are plotted as below.
+
+**Q-Q plot**
+
+```{r}
+qqnorm(model.3$residuals)
+qqline(model.3$residuals)
+```
+
+Most of residuals fit well with the theoretical line and only some deviations are observed at both ends.
+
+**ACF and PACF**
+
+```{r}
+tsdisplay(model.3$residuals)
+```
+
+Autocorrelation of some Lags can be clearly observed from ACF and PACF plots of residuals.
+
+**Durbin-Watson test**
+
+```{r}
+dw.3<-durbinWatsonTest(residuals(model.3)); dw.3
+```
+
+From above Durbin-Watson Test, residuals in model.3 are positively autocorrelated.
+
+**Ljung-Box test**
+
+```{r}
+box.test.3<-Box.test(residuals(model.3),lag=20, fitdf=2, type="Ljung-Box"); box.test.3
+```
+
+ Further Box.test confirms that there is correlation in the residuals of model.3.
+
+##4. Use ARIMA (0,0,2) model for the residuals. Adjust the Input gas rate and Output CO2 % with the MA coefficient. Combine with the linear regression model. Plot the residuals.
+
+ARIMA (0,0,2) is performed on the residuals of linear.model.
+
+```{r}
+arima.002 <- arima(residuals.linear, order=c(0,0,2),include.mean=FALSE)
+```
+
+The input and output variables are transformed using MA coefficinets. Model.4 is generated on the adjusted variables.
+
+
+```{r}
+innovation.002.outlet <- arma.innovation(gas$Outlet.gas.CO2.percentage, arima.002)
+innovation.002.input <- arma.innovation(gas$Input.gas.rate, arima.002)
+model.4 <- lm(innovation.002.outlet~innovation.002.input)
+summary(model.4)
+```
+
+From summary of this model.4, both intercept and slope are statistically significant. The R-squared value of model.4 is lower than the linear.model in part1. So the fit of this model is reduced comparing with linear.model before transformation.
+
+
+```{r}
+plot(innovation.002.outlet, type='l')
+lines(model.4$fitted.values, col="red")
+legend("bottomright",
+       legend=c("actual values","fitted values"),
+       col=c("black","red"),lwd=1,bty='n')
+```
+
+The fitted values of model.4 don't mimic pattern of actual values. This model is not good at in-sample prediction.
+
+**Q-Q plot**
+
+```{r}
+qqnorm(model.4$residuals)
+qqline(model.4$residuals)
+
+```
+
+Most of residuls fit well with the theoretical line and only some deviations are observed at both ends.
+
+**ACF and PACF**
+
+```{r}
+tsdisplay(model.4$residuals)
+```
+
+Autocorrelation in many Lags can be clearly observed from ACF and PACF plots of residuals.
+
+**Durbin-Watson test**
+
+```{r}
+dw.4 <- durbinWatsonTest(residuals(model.4));dw.4
+```
+From above Durbin-Watson Test, residuals in model.4 are positively autocorrelated.
+
+**Ljung-Box test**
+
+```{r}
+box.test.4<-Box.test(residuals(model.4),lag=20, fitdf=2, type="Ljung-Box"); box.test.4
+```
+
+ p-value of box.test.4 is below 0.05. There are some correlation in the residuals of model.4.
+
+##5. Use ARIMA (2,0,0) model for the residuals. Adjust the Input gas rate and Output CO2 % with the AR coefficient. Combine with the linear regression model. Plot the residuals.
+
+ARIMA (2,0,0) is performed on the residuals of linear.model.
+
+```{r}
+arima.200 <- arima(residuals.linear, order=c(2,0,0),include.mean=FALSE)
+
+```
+
+The input and output variables are transformed using MA coefficinets. Model.5 is generated on the adjusted variables.
+
+
+```{r}
+innovation.200.outlet <- arma.innovation(gas$Outlet.gas.CO2.percentage, arima.200)
+innovation.200.input <- arma.innovation(gas$Input.gas.rate, arima.200)
+model.5 <- lm(innovation.200.outlet~innovation.200.input)
+summary(model.5)
+```
+
+From summary of this model.5, both intercept and slope are statistically significant. The R-squared value of model.5 is lower than the linear.model in part1. So the fit of this model is reduced comparing with linear.model before transformation.
+
+
+```{r}
+plot(innovation.200.outlet, type='l')
+lines(model.5$fitted.values, col="red")
+legend("bottomright",
+       legend=c("actual values","fitted values"),
+       col=c("black","red"),lwd=1,bty='n')
+```
+
+The fitted values of model.5 don't mimic zig-zug pattern of actual values. This model is not good at in-sample prediction.
+
+**Q-Q plot**
+
+```{r}
+qqnorm(model.5$residuals)
+qqline(model.5$residuals)
+
+```
+
+Most of residuls fit well with the theoretical line and only some deviations are observed at both ends.
+
+```{r}
+tsdisplay(model.5$residuals)
+```
+
+Autocorrelation in many Lags can be clearly observed from ACF and PACF plots of residuals.
+
+**Durbin-Watson test**
+
+```{r}
+dw.5 <- durbinWatsonTest(residuals(model.5));dw.5
+```
+
+From above Durbin-Watson Test, residuals in model.5 are positively autocorrelated.
+
+**Ljung-Box test**
+
+```{r}
+box.test.5<-Box.test(residuals(model.5),lag=20, fitdf=2, type="Ljung-Box"); box.test.5
+```
+
+ p-value of box.test.5 is below 0.05. There is correltaion in the residuals of model.5.
+
+##6. Use ARIMA (2,0,2) model for the residuals. Adjust the Input gas rate and Output CO2 % with the AR and MA coefficients. Combine with the linear regression model. Plot the residuals.
+
+ARIMA (2,0,2) is performed on the residuals of linear.model.
+
+```{r}
+arima.202 <- arima(residuals.linear, order=c(2,0,2),include.mean=FALSE)
+```
+
+The input and output variables are transformed using MA coefficinets. Model.6 is generated on the adjusted variables.
+
+
+```{r}
+innovation.202.outlet <- arma.innovation(gas$Outlet.gas.CO2.percentage, arima.202)
+innovation.202.input <- arma.innovation(gas$Input.gas.rate, arima.202)
+model.6 <- lm(innovation.202.outlet~innovation.202.input)
+summary(model.6)
+```
+
+From summary of this model.6, both intercept and slope are statistically significant. The R-squared value of model.6 is lower than the linear.model in part1. So the fit of this model is reduced comparing with linear.model before transformation.
+
+
+```{r}
+plot(innovation.202.outlet, type='l')
+lines(model.6$fitted.values, col="red")
+legend("bottomright",
+       legend=c("actual values","fitted values"),
+       col=c("black","red"),lwd=1,bty='n')
+```
+
+The fitted values of model.6 don't mimic zig-zug pattern of actual values. This model is not good to predict the output.
+
+**Q-Q plot**
+
+```{r}
+qqnorm(model.6$residuals)
+qqline(model.6$residuals)
+
+```
+
+Most of residuals fit well with the theoretical line and only some deviations are observed at both ends.
+
+**ACF and PACF**
+
+```{r}
+tsdisplay(model.6$residuals)
+```
+
+Autocorrelation in many Lags can be clearly observed from ACF and PACF plots of residuals.
+
+**Durbin-Watson test**
+
+```{r}
+dw.6 <- durbinWatsonTest(residuals(model.6));dw.6
+```
+
+From above Durbin-Watson Test, residuals in model.6 are positively autocorrelated.
+
+**Ljung-Box test**
+
+```{r}
+box.test.6<-Box.test(residuals(model.6),lag=20, fitdf=2, type="Ljung"); box.test.6
+```
+
+ p-value of box.test.6 is below 0.05. There is correltaion in the residuals of model.6.
+
+
+##7. Use fractional ARIMA model (aka ARFIMA) for the output gas CO2% - plot the residuals, acf and pacf plots of the model. You can use an R package like fracdiff
+
+In this step, I used two approaches for ARFIMA model. One approcah is using R package of fracdiff to find expected d value, further differencing the output gas CO2% and generating ARIMA model. Another approach is using arfima function in package forecast.
+
+**The results of first approach are as below.**
+
+Using the fracdiff() function, the d value is calculated for the output gas CO2 percentage.
+
+```{r}
+library(fracdiff)
+Outlet<-ts(gas$Outlet.gas.CO2.percentage,start=1)
+outlet.fracdiff <- fracdiff(Outlet)
+summary(outlet.fracdiff)
+```
+
+The fractional d value is calculated in fracdiff(). This d value is statistically significant.
+
+The Outlet.gas.CO2.percentage is differenced using the output value of d.
+
+```{r}
+d<-outlet.fracdiff$d
+Outlet.d<-diffseries(Outlet,d)
+```
+
+The arima model is generated using auto.arima function.
+
+```{r}
+arfima.auto<-auto.arima(Outlet.d)
+arfima.auto
+```
+
+Using auto.arima function, the output model is ARIMA(3,0,2).
+
+Run the loop to find model with the lowest AICc value or BIC value by changing p and q value.
+
+```{r}
+table1=matrix(0,(5-1+1)*(5+1),4)
+
+k=1
+for (i in 1:5) {
+    for (j in 0:5) {
+            models=arima(Outlet.d, order=c(i,0,j))
+            npar=length(models$coef) + 1
+            nstar=length(models$residuals) - models$arma[6] - models$arma[7]*models$arma[5]
+            
+            aic=models$aic
+            bic=models$aic + npar * (log(nstar) - 2)
+            aicc=models$aic + 2*npar*(nstar/(nstar - npar - 1) - 1)
+
+            table1[k,1]=paste0("ARIMA(",i,",",0,",",j,")")
+            table1[k,2]=round(aicc,2)
+            table1[k,3]=round(bic,2)
+            table1[k,4]=round(aic,2)
+            k=k+1
+    }
+}
+```
+
+The AICc and BIC values are printed as below.
+
+```{r}
+table1=data.frame(table1)
+table1=table1[order(table1[,2]),]
+colnames(table1)=c("ARIMA model","AICc","BIC","AIC")
+table1
+```
+
+ARIMA(5,0,3) has the lowest AICc value while ARIMA(4,0,0) has the lowest BIC value. Both models are generated for comparision.
+
+
+```{r}
+arfima.503<-arima(Outlet.d, order=c(5,0,3))
+arfima.400<-arima(Outlet.d, order=c(4,0,0))
+```
+
+The fitted values of these two models are plotted as below.
+
+```{r}
+plot(Outlet.d, type='l')
+lines(fitted(arfima.503), col="red",lty=2)
+lines(fitted(arfima.400), col="green",lty=3)
+legend("bottomright",
+       legend=c("actual values","arfima.503","arfima.400"),
+       col=c("black","red","green"),lty=c(1,2,3),lwd=1,bty='n',cex=0.7)
+```
+
+The fitted values of arfima.503 and arfima.400 mimic zig-zug pattern of actual values very well. This model is good to predict the in-sample output. Next, the residuals of these models are further analyzed.
+
+**Q-Q plot**
+
+Next, QQ-plot of residuals in these two models are examined.
+
+```{r}
+qqnorm(arfima.503$residuals)
+qqline(arfima.503$residuals)
+qqnorm(arfima.400$residuals)
+qqline(arfima.400$residuals)
+```
+
+Most of residuals in these two models fit with theoretical line and only some deviations are observed at both ends.
+
+**ACF and PACF**
+
+```{r}
+tsdisplay(residuals(arfima.503))
+tsdisplay(residuals(arfima.400))
+```
+
+The residual patterns in these two models are similar. No significant autocorrelation were observed in acf and pacf plots of these two models. The autocorrelation pattern are randomly distributed.
+
+**Durbin-Watson test**
+
+```{r}
+dw.7.1<-durbinWatsonTest(as.vector(residuals(arfima.503))); dw.7.1
+dw.7.2<-durbinWatsonTest(as.vector(residuals(arfima.400))); dw.7.2
+```
+
+The Durbin-Watson test show residuals in these two models are very slightly positively distributed.
+
+**Ljung-Box test**
+
+```{r}
+box.test.7.1<-Box.test(residuals(arfima.503),lag=20, fitdf=8, type="Ljung"); box.test.7.1
+box.test.7.2<-Box.test(residuals(arfima.400),lag=20, fitdf=4, type="Ljung"); box.test.7.2
+```
+
+Through above Box.test, p values of both models are above0.05. Null hypothesis are retained and residuals of arfima.503 and arfima.400 are white noise.
+
+**Another approach is using arfima function in package forecast.**
+
+```{r}
+fit.arfima<-arfima(Outlet)
+```
+
+The residuals of fit.arfima are further analyzed.
+
+**Q-Q plot**
+
+```{r}
+qqnorm(fit.arfima$residuals)
+qqline(fit.arfima$residuals)
+```
+
+Most of residuals fit with theoretical line and only some deviations are observed at both ends.
+
+**ACF and PACF**
+
+```{r}
+tsdisplay(residuals(fit.arfima))
+```
+
+Only autocorrelation of few Lags are significant.
+
+**Durbin-Watson test**
+
+```{r}
+dw.7.3<-durbinWatsonTest(as.vector(residuals(fit.arfima))); dw.7.3
+```
+
+From DurbinWatson test, the residuals of fit.arfima are positively correlated.
+
+**Ljung-Box test**
+
+```{r}
+box.test.7.3<-Box.test(residuals(fit.arfima),lag=20, fitdf=8, type="Ljung");box.test.7.3
+```
+
+p-value of box.test.7.3 is below 0.05. There are some correltaion in the residuals of model.7.3.
+
+##8. Which ARIMA model gives the best result in terms of residuals being close to white noise ?
+
+p values of Box.test in different models are summaried as below.
+
+```{r}
+rbind(part1=box.test.1$p.value, part2=box.test.2$p.value, part3=box.test.3$p.value, part4=box.test.4$p.value, part5=box.test.5$p.value, part6=box.test.6$p.value, part7.1=box.test.7.1$p.value,part7.2=box.test.7.2$p.value, part7.3=box.test.7.3$p.value)
+```
+
+From p value of Box.test in these models, only p values of box.test.7.1 (arfima.503) and box.test.7.2(arfima.400) are above 0.05. I retain null hypothesis that the residuals in these two models are white noise.
+
+Durbin-Watson test of residuals in these models are summarized as below.
+
+```{r}
+rbind(part1=dw.1, part2=dw.2, part3=dw.3, part4=dw.4, part5=dw.5, part6=dw.6, part7.1=dw.7.1, part7.2=dw.7.2, part7.3=dw.7.3)
+```
+
+Through Durbin-Watson test, the value of dw.7.1 and dw.7.2 is closest to 2. These means that the residuals in arfima.503 and arfima.400 are least positively autocorrelated.
+
+AIC of the models are binded as below.
+
+```{r}
+rbind(part1=AIC(linear.model), part2=AIC(model.2), part3=AIC(model.3), part4=AIC(model.4), part5=AIC(model.5), part6=AIC(model.6), part7.1=AIC(arfima.503),part7.2=AIC(arfima.400), part7.3=AIC(fit.arfima))
+```
+
+The AIC value of arfima.503 is the lowest among all these models.
+
+RMSE of the residuals in these models are compared as below.
+
+```{r}
+rbind(part1=sqrt(mean((linear.model$residual)^2)), part2=sqrt(mean((model.2$residual)^2)), part3=sqrt(mean((model.3$residual)^2)), part4=sqrt(mean((model.4$residual)^2)), part5=sqrt(mean((model.5$residual)^2)), part6=sqrt(mean((model.6$residual)^2)),part7.1=sqrt(mean((arfima.503$residual)^2)),part7.2=sqrt(mean((arfima.400$residual)^2)), part7.3=sqrt(mean((fit.arfima$residual)^2)))
+```
+
+RMSE of residuals in arfima.503 is the lowest among all these models.
+
+Take all comparision together, arfima.503 model in part 7 gives the best result in terms of residuals being close to white noise.
